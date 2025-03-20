@@ -8,23 +8,31 @@ from langchain.memory import ConversationBufferMemory
 import google.generativeai as genai
 from langchain.embeddings import HuggingFaceEmbeddings
 from io import BytesIO
+import tempfile
 
 # 환경 변수 로드
 load_dotenv()
 google_api_key = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=google_api_key)
 
-# 1. 업로드된 PDF 문서 로드
-def load_pdf_from_upload(uploaded_file):
-    if uploaded_file is not None:
-        # Streamlit의 UploadedFile 객체를 PyPDFLoader가 읽을 수 있는 파일로 변환
-        bytes_data = uploaded_file.read()
-        with open("temp.pdf", "wb") as f:
-            f.write(bytes_data)
-        loader = PyPDFLoader("temp.pdf")
-        documents = loader.load()
-        return documents
-    return None
+# 1. 업로드된 다중 PDF 문서 로드
+def load_pdfs_from_upload(uploaded_files):
+    all_documents = []
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            # Streamlit의 UploadedFile 객체를 임시 파일로 저장
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.read())
+                tmp_file_path = tmp_file.name
+            
+            # PyPDFLoader로 문서 로드
+            loader = PyPDFLoader(tmp_file_path)
+            documents = loader.load()
+            all_documents.extend(documents)
+            
+            # 임시 파일 삭제
+            os.remove(tmp_file_path)
+    return all_documents
 
 # 2. 텍스트 분할
 def split_documents(documents):
@@ -56,37 +64,24 @@ def setup_chatbot(vector_store):
         docs = vector_store.similarity_search(question, k=2)
         context = "\n".join([doc.page_content for doc in docs])
         
-        chat_history = memory.load_memory_variables({})["chat_history"]
-        if chat_history:
-            context += f"\n이전 대화: {chat_history[-2:]}"
-        
-        answer = get_gemini_response(question, context)
-        memory.save_context({"question": question}, {"answer": answer})
-        return answer
-    
-    return chat_with_memory
+        chat요.")
 
-# Streamlit 앱
-def main():
-    st.title("PDF 기반 챗봇")
-    st.write("PDF 파일을 업로드하여 질문에 답변받아보세요.")
-
-    # PDF 업로드 위젯
-    uploaded_file = st.file_uploader(accept_multiple_files=True)("PDF 파일을 업로드하세요", type=["pdf"])
+    # PDF 업로드 위젯 (다중 파일 지원)
+    uploaded_files = st.file_uploader("PDF 파일을 업로드하세요", type=["pdf"], accept_multiple_files=True)
 
     # 세션 상태 초기화
     if "chatbot" not in st.session_state:
         st.session_state.chatbot = None
 
     # 업로드된 파일 처리
-    if uploaded_file is not None and st.session_state.chatbot is None:
-        with st.spinner("PDF를 로드하고 처리 중..."):
-            documents = load_pdf_from_upload(uploaded_file)
+    if uploaded_files and st.session_state.chatbot is None:
+        with st.spinner("PDF들을 로드하고 처리 중..."):
+            documents = load_pdfs_from_upload(uploaded_files)
             if documents:
                 split_docs = split_documents(documents)
                 vector_store = create_vector_store(split_docs)
                 st.session_state.chatbot = setup_chatbot(vector_store)
-                st.success("챗봇 준비 완료!")
+                st.success(f"{len(uploaded_files)}개의 PDF 처리 완료! 챗봇 준비 완료!")
             else:
                 st.error("PDF 로드에 실패했습니다.")
 
