@@ -64,7 +64,20 @@ def setup_chatbot(vector_store):
         docs = vector_store.similarity_search(question, k=2)
         context = "\n".join([doc.page_content for doc in docs])
         
-        chat요.")
+        chat_history = memory.load_memory_variables({})["chat_history"]
+        if chat_history:
+            context += f"\n이전 대화: {chat_history[-2:]}"
+        
+        answer = get_gemini_response(question, context)
+        memory.save_context({"question": question}, {"answer": answer})
+        return answer
+    
+    return chat_with_memory
+
+# Streamlit 앱
+def main():
+    st.title("다중 PDF 기반 챗봇")
+    st.write("여러 PDF 파일을 업로드하여 질문에 답변받아보세요.")
 
     # PDF 업로드 위젯 (다중 파일 지원)
     uploaded_files = st.file_uploader("PDF 파일을 업로드하세요", type=["pdf"], accept_multiple_files=True)
