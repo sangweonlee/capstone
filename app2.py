@@ -72,7 +72,7 @@ def main():
     st.write("PDF 파일을 업로드하여 질문에 답변받아보세요.")
 
     # PDF 업로드 위젯
-    uploaded_file = st.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
+    uploaded_file = st.file_uploader(accept_multiple_files=True)("PDF 파일을 업로드하세요", type=["pdf"])
 
     # 세션 상태 초기화
     if "chatbot" not in st.session_state:
